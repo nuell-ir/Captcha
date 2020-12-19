@@ -3,6 +3,7 @@ using SixLabors.Fonts;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Drawing;
 using SixLabors.ImageSharp.Drawing.Processing;
+using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using System;
@@ -90,7 +91,8 @@ namespace nuell
                 cmnd.ExecuteNonQuery();
             }
 
-            img.Save(System.IO.Path.Combine(RootPath, Path, $"{Code}.png"));
+            img.SaveAsPng(System.IO.Path.Combine(RootPath, Path, $"{Code}.png"),
+                new PngEncoder { ColorType = PngColorType.Palette });
             Src = System.IO.Path.Combine("/", Path, $"{Code}.png").Replace('\\', '/');
         }
 
