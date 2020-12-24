@@ -26,7 +26,7 @@ namespace nuell
         public static string RootPath { get; set; }
         public static string ConnString { get; set; }
 
-        public Captcha()
+        public Captcha(bool base64Src = false)
         {
             CleanUp();
 
@@ -83,7 +83,7 @@ namespace nuell
             using (var cnnct = new SqlConnection(ConnString))
             {
                 using var cmnd = new SqlCommand($@"insert into CaptchaCodes (Id, Captcha, CreationDate) 
-                    values (@id, @captcha, getdate())", cnnct);
+                    values (@id, @captcha, @date)", cnnct);
                 cmnd.Parameters.Add(new SqlParameter("@id", Code));
                 cmnd.Parameters.Add(new SqlParameter("@captcha", randNumber));
                 cmnd.Parameters.Add(new SqlParameter("@date", DateTime.Now));
@@ -91,9 +91,18 @@ namespace nuell
                 cmnd.ExecuteNonQuery();
             }
 
-            img.SaveAsPng(System.IO.Path.Combine(RootPath, Path, $"{Code}.png"),
-                new PngEncoder { ColorType = PngColorType.Palette });
-            Src = System.IO.Path.Combine("/", Path, $"{Code}.png").Replace('\\', '/');
+            var encoder = new PngEncoder { ColorType = PngColorType.Palette };
+            if (base64Src)
+            {
+                using var mem = new MemoryStream();
+                img.SaveAsPng(mem, encoder);
+                Src = "data:image/png;base64," + Convert.ToBase64String(mem.ToArray());
+            }
+            else
+            {
+                img.SaveAsPng(System.IO.Path.Combine(RootPath, Path, $"{Code}.png"), encoder);
+                Src = System.IO.Path.Combine("/", Path, $"{Code}.png").Replace('\\', '/');
+            }
         }
 
         public static bool IsValid(string userInput, string captchaCode)
@@ -104,14 +113,19 @@ namespace nuell
             int.TryParse(userInput, out int input);
 
             string imgFile = System.IO.Path.Combine(RootPath, Path, $"{code}.png");
-            if (!File.Exists(imgFile))
-                return false;
-            File.Delete(imgFile);
+            if (File.Exists(imgFile))
+                File.Delete(imgFile);
 
             using var cnnct = new SqlConnection(ConnString);
             using var cmnd = new SqlCommand($"select 1 from CaptchaCodes where Id={code} and Captcha={input}", cnnct);
             cnnct.Open();
-            return Convert.ToBoolean(cmnd.ExecuteScalar());
+            bool exists = Convert.ToBoolean(cmnd.ExecuteScalar());
+            if (exists)
+            {
+                cmnd.CommandText = $"delete from CaptchaCodes where Id={code} and Captcha={input}";
+                cmnd.ExecuteNonQuery();
+            }
+            return exists;
         }
 
         private static void CleanUp()
