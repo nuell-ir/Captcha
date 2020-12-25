@@ -14,19 +14,20 @@ namespace nuell
 {
     public class Captcha
     {
-        public string Src { get; private set; }
-        public long Code { get; private set; }
         public static int Digits { get; set; } = 5;
         public static Color ForeColor { get; set; } = Color.FromRgb(60, 60, 60);
         public static Color BackColor { get; set; } = Color.White;
         public static int Width { get; set; } = 200;
         public static int Height { get; set; } = 60;
-        public static string Path { get; set; }
+
         public static string FontPath { get; set; }
         public static string RootPath { get; set; }
-        public static string ConnString { get; set; }
+        public static string ConnectionString { get; set; }
 
-        public Captcha(bool base64Src = false)
+        public string Src { get; private set; }
+        public long Code { get; private set; }
+
+        public Captcha()
         {
             CleanUp();
 
@@ -80,7 +81,7 @@ namespace nuell
 
             Code = BitConverter.ToInt64(Guid.NewGuid().ToByteArray(), 4);
 
-            using (var cnnct = new SqlConnection(ConnString))
+            using (var cnnct = new SqlConnection(ConnectionString))
             {
                 using var cmnd = new SqlCommand($@"insert into CaptchaCodes (Id, Captcha, CreationDate) 
                     values (@id, @captcha, @date)", cnnct);
@@ -92,17 +93,9 @@ namespace nuell
             }
 
             var encoder = new PngEncoder { ColorType = PngColorType.Palette };
-            if (base64Src)
-            {
-                using var mem = new MemoryStream();
-                img.SaveAsPng(mem, encoder);
-                Src = "data:image/png;base64," + Convert.ToBase64String(mem.ToArray());
-            }
-            else
-            {
-                img.SaveAsPng(System.IO.Path.Combine(RootPath, Path, $"{Code}.png"), encoder);
-                Src = System.IO.Path.Combine("/", Path, $"{Code}.png").Replace('\\', '/');
-            }
+            using var mem = new MemoryStream();
+            img.SaveAsPng(mem, encoder);
+            Src = "data:image/png;base64," + Convert.ToBase64String(mem.ToArray());
         }
 
         public static bool IsValid(string userInput, string captchaCode)
@@ -112,11 +105,7 @@ namespace nuell
             long.TryParse(captchaCode, out long code);
             int.TryParse(userInput, out int input);
 
-            string imgFile = System.IO.Path.Combine(RootPath, Path, $"{code}.png");
-            if (File.Exists(imgFile))
-                File.Delete(imgFile);
-
-            using var cnnct = new SqlConnection(ConnString);
+            using var cnnct = new SqlConnection(ConnectionString);
             using var cmnd = new SqlCommand($"select 1 from CaptchaCodes where Id={code} and Captcha={input}", cnnct);
             cnnct.Open();
             bool exists = Convert.ToBoolean(cmnd.ExecuteScalar());
@@ -130,12 +119,6 @@ namespace nuell
 
         private static void CleanUp()
         {
-            DateTime expiry = DateTime.Now.AddMinutes(-10);
-
-            foreach (string f in Directory.GetFiles(System.IO.Path.Combine(RootPath, Path), "*.png"))
-                if (File.GetCreationTime(f) < expiry)
-                    File.Delete(f);
-
             string cmdTxt =
                 @"if not exists(select 1 from INFORMATION_SCHEMA.TABLES where TABLE_NAME = 'CaptchaCodes')
                     create table CaptchaCodes(
@@ -144,9 +127,9 @@ namespace nuell
                         CreationDate datetime2 not null,
                         constraint PK_CaptchaCodes primary key(Id));
                 delete from CaptchaCodes where CreationDate < @date;";
-            using var cnnct = new SqlConnection(ConnString);
+            using var cnnct = new SqlConnection(ConnectionString);
             using var cmnd = new SqlCommand(cmdTxt, cnnct);
-            cmnd.Parameters.Add(new SqlParameter("@date", expiry));
+            cmnd.Parameters.Add(new SqlParameter("@date", DateTime.Now.AddMinutes(-5)));
             cnnct.Open();
             cmnd.ExecuteNonQuery();
         }
