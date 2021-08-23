@@ -83,7 +83,7 @@ namespace nuell
 
             using (var cnnct = new SqlConnection(ConnectionString))
             {
-                using var cmnd = new SqlCommand($@"insert into CaptchaCodes (Id, Captcha, CreationDate) 
+                using var cmnd = new SqlCommand($@"insert into dbo.CaptchaCodes (Id, Captcha, CreationDate) 
                     values (@id, @captcha, @date)", cnnct);
                 cmnd.Parameters.Add(new SqlParameter("@id", Code));
                 cmnd.Parameters.Add(new SqlParameter("@captcha", randNumber));
@@ -106,12 +106,12 @@ namespace nuell
             int.TryParse(userInput, out int input);
 
             using var cnnct = new SqlConnection(ConnectionString);
-            using var cmnd = new SqlCommand($"select 1 from CaptchaCodes where Id={code} and Captcha={input}", cnnct);
+            using var cmnd = new SqlCommand($"select 1 from dbo.CaptchaCodes where Id={code} and Captcha={input}", cnnct);
             cnnct.Open();
             bool exists = Convert.ToBoolean(cmnd.ExecuteScalar());
             if (exists)
             {
-                cmnd.CommandText = $"delete from CaptchaCodes where Id={code} and Captcha={input}";
+                cmnd.CommandText = $"delete from dbo.CaptchaCodes where Id={code} and Captcha={input}";
                 cmnd.ExecuteNonQuery();
             }
             return exists;
@@ -121,12 +121,13 @@ namespace nuell
         {
             string cmdTxt =
                 @"if not exists(select 1 from INFORMATION_SCHEMA.TABLES where TABLE_NAME = 'CaptchaCodes')
-                    create table CaptchaCodes(
+                    create table dbo.CaptchaCodes(
                         Id bigint not null,
                         Captcha int not null,
                         CreationDate datetime2 not null,
                         constraint PK_CaptchaCodes primary key(Id));
-                delete from CaptchaCodes where CreationDate < @date;";
+                else
+                    delete from dbo.CaptchaCodes where CreationDate < @date;";
             using var cnnct = new SqlConnection(ConnectionString);
             using var cmnd = new SqlCommand(cmdTxt, cnnct);
             cmnd.Parameters.Add(new SqlParameter("@date", DateTime.Now.AddMinutes(-5)));
