@@ -1,26 +1,27 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>net5.0</TargetFramework>
-    <RootNamespace>nuell</RootNamespace>
-    <Version>1.0.1</Version>
-    <Company>nuell</Company>
-    <Product>Captcha</Product>
-    <Authors>Ako Mahmoodi</Authors>
-    <RepositoryUrl>https://github.com/pellk/Captcha</RepositoryUrl>
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
-    <PackageTags>captcha, base64</PackageTags>
-    <PackageId>nuell_Captcha</PackageId>
-  </PropertyGroup>
-  <ItemGroup>
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="3.0.0"/>
-    <PackageReference Include="SixLabors.Fonts" Version="1.0.0-beta15"/>
-    <PackageReference Include="SixLabors.ImageSharp" Version="1.0.3"/>
-    <PackageReference Include="SixLabors.ImageSharp.Drawing" Version="1.0.0-beta13"/>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="LICENSE">
-      <Pack>True</Pack>
-      <PackagePath/>
-    </None>
-  </ItemGroup>
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<RootNamespace>nuel</RootNamespace>
+		<Version>1.1.0</Version>
+		<Company>nuel</Company>
+		<Product>Captcha</Product>
+		<Authors>Ako Mahmoodi</Authors>
+		<RepositoryUrl>https://github.com/pellk/Captcha</RepositoryUrl>
+		<PackageLicenseFile>LICENSE</PackageLicenseFile>
+		<PackageTags>captcha, base64</PackageTags>
+		<PackageId>nuel_Captcha</PackageId>
+	</PropertyGroup>
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.1" />
+		<PackageReference Include="SixLabors.Fonts" Version="1.0.1" />
+		<PackageReference Include="SixLabors.ImageSharp" Version="2.1.13" />
+		<PackageReference Include="SixLabors.ImageSharp.Drawing" Version="1.0.0" />
+	</ItemGroup>
+	<ItemGroup>
+		<None Include="LICENSE">
+			<Pack>True</Pack>
+			<PackagePath />
+		</None>
+	</ItemGroup>
 </Project>
