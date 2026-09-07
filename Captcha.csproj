@@ -2,18 +2,22 @@
 	<PropertyGroup>
 		<TargetFramework>net10.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
 		<RootNamespace>nuel</RootNamespace>
-		<Version>1.1.0</Version>
+		<Version>2.0.0</Version>
 		<Company>nuel</Company>
 		<Product>Captcha</Product>
 		<Authors>Ako Mahmoodi</Authors>
 		<RepositoryUrl>https://github.com/pellk/Captcha</RepositoryUrl>
 		<PackageLicenseFile>LICENSE</PackageLicenseFile>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<PackageTags>captcha, base64</PackageTags>
 		<PackageId>nuel_Captcha</PackageId>
 	</PropertyGroup>
 	<ItemGroup>
 		<PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.1" />
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
+		<PackageReference Include="Microsoft.Extensions.Options" Version="10.0.0" />
 		<PackageReference Include="SixLabors.Fonts" Version="1.0.1" />
 		<PackageReference Include="SixLabors.ImageSharp" Version="2.1.13" />
 		<PackageReference Include="SixLabors.ImageSharp.Drawing" Version="1.0.0" />
@@ -23,9 +27,9 @@
 			<Pack>True</Pack>
 			<PackagePath />
 		</None>
-		<None Include="Migrations\*.sql">
+		<None Include="README.md">
 			<Pack>True</Pack>
-			<PackagePath>contentFiles\any\any\Migrations;Migrations</PackagePath>
+			<PackagePath />
 		</None>
 	</ItemGroup>
 </Project>
