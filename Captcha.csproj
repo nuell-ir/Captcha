@@ -23,5 +23,9 @@
 			<Pack>True</Pack>
 			<PackagePath />
 		</None>
+		<None Include="Migrations\*.sql">
+			<Pack>True</Pack>
+			<PackagePath>contentFiles\any\any\Migrations;Migrations</PackagePath>
+		</None>
 	</ItemGroup>
 </Project>

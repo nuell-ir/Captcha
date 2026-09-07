@@ -1,4 +1,6 @@
+using System.Data;
 using System.Security.Cryptography;
+using System.Threading;
 using Microsoft.Data.SqlClient;
 using SixLabors.Fonts;
 using SixLabors.ImageSharp;
@@ -21,12 +23,68 @@ public class Captcha
     public static string RootPath { get; set; }
     public static string ConnectionString { get; set; }
 
+    public static TimeSpan Expiration { get; set; } = TimeSpan.FromMinutes(5);
+    public static TimeSpan CleanUpInterval { get; set; } = TimeSpan.FromMinutes(10);
+
+    private static long _lastCleanUpTicks = 0;
+    private static readonly Lock _initLock = new();
+    private static volatile bool _isInitialized = false;
+
     public string Src { get; private set; }
     public long Code { get; private set; }
 
+    private static void EnsureDatabaseInitialized()
+    {
+        if (_isInitialized) return;
+
+        lock (_initLock)
+        {
+            if (_isInitialized) return;
+
+            try
+            {
+                InitializeDatabase();
+            }
+            catch
+            {
+                // Ostrich strategy: Ignore concurrency collisions or pre-existing table errors
+            }
+
+            _isInitialized = true;
+        }
+    }
+
+    private static void InitializeDatabase()
+    {
+        if (string.IsNullOrEmpty(ConnectionString))
+            throw new InvalidOperationException("ConnectionString is not configured.");
+
+        const string ddl = @"
+            IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CaptchaCodes' AND schema_id = SCHEMA_ID('dbo'))
+            BEGIN
+                CREATE TABLE dbo.CaptchaCodes (
+                    Id bigint NOT NULL,
+                    Captcha int NOT NULL,
+                    CreationDate datetime2 NOT NULL,
+                    CONSTRAINT PK_CaptchaCodes PRIMARY KEY CLUSTERED (Id)
+                );
+            END;
+
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_CaptchaCodes_CreationDate' AND object_id = OBJECT_ID('dbo.CaptchaCodes'))
+            BEGIN
+                CREATE NONCLUSTERED INDEX IX_CaptchaCodes_CreationDate ON dbo.CaptchaCodes (CreationDate);
+            END;";
+
+        using var cnnct = new SqlConnection(ConnectionString);
+        using var cmnd = new SqlCommand(ddl, cnnct);
+        cnnct.Open();
+        cmnd.ExecuteNonQuery();
+    }
+
     public Captcha()
     {
-        CleanUp();
+        EnsureDatabaseInitialized();
+        TryCleanUp();
 
         int randNumber = RandomNumberGenerator.GetInt32((int)Math.Pow(10, Digits));
 
@@ -40,7 +98,7 @@ public class Captcha
 
         var charSize = new FontRectangle[txt.Length];
         for (int i = 0; i < charSize.Length; i++)
-            charSize[i] = TextMeasurer.MeasureSize(txt.Substring(i, 1), textOptions);
+            charSize[i] = TextMeasurer.MeasureSize(txt.AsSpan(i, 1), textOptions);
 
         var rnd = new Random();
         float x = ((float)rnd.NextDouble() + 1f) * Width * 0.1f, y;
@@ -80,11 +138,11 @@ public class Captcha
 
         using (var cnnct = new SqlConnection(ConnectionString))
         {
-            using var cmnd = new SqlCommand($@"insert into dbo.CaptchaCodes (Id, Captcha, CreationDate) 
+            using var cmnd = new SqlCommand(@"insert into dbo.CaptchaCodes (Id, Captcha, CreationDate) 
                     values (@id, @captcha, @date)", cnnct);
-            cmnd.Parameters.Add(new SqlParameter("@id", Code));
-            cmnd.Parameters.Add(new SqlParameter("@captcha", randNumber));
-            cmnd.Parameters.Add(new SqlParameter("@date", DateTime.Now));
+            cmnd.Parameters.Add(new SqlParameter("@id", SqlDbType.BigInt) { Value = Code });
+            cmnd.Parameters.Add(new SqlParameter("@captcha", SqlDbType.Int) { Value = randNumber });
+            cmnd.Parameters.Add(new SqlParameter("@date", SqlDbType.DateTime2) { Value = DateTime.UtcNow });
             cnnct.Open();
             cmnd.ExecuteNonQuery();
         }
@@ -97,36 +155,50 @@ public class Captcha
 
     public static bool IsValid(string userInput, string captchaCode)
     {
-        CleanUp();
-
-        long.TryParse(captchaCode, out long code);
-        int.TryParse(userInput, out int input);
+        if (!long.TryParse(captchaCode, out long code) || !int.TryParse(userInput, out int input))
+            return false;
 
         using var cnnct = new SqlConnection(ConnectionString);
         using var cmnd = new SqlCommand(
             "delete from dbo.CaptchaCodes where Id = @id and Captcha = @captcha and CreationDate >= @date", cnnct);
-        cmnd.Parameters.Add(new SqlParameter("@id", code));
-        cmnd.Parameters.Add(new SqlParameter("@captcha", input));
-        cmnd.Parameters.Add(new SqlParameter("@date", DateTime.Now.AddMinutes(-5)));
+        cmnd.Parameters.Add(new SqlParameter("@id", SqlDbType.BigInt) { Value = code });
+        cmnd.Parameters.Add(new SqlParameter("@captcha", SqlDbType.Int) { Value = input });
+        cmnd.Parameters.Add(new SqlParameter("@date", SqlDbType.DateTime2) { Value = DateTime.UtcNow.Subtract(Expiration) });
         cnnct.Open();
         return cmnd.ExecuteNonQuery() == 1;
     }
 
-    private static void CleanUp()
+    private static void TryCleanUp()
     {
-        string cmdTxt =
-            @"if not exists(select 1 from INFORMATION_SCHEMA.TABLES where TABLE_NAME = 'CaptchaCodes')
-                    create table dbo.CaptchaCodes(
-                        Id bigint not null,
-                        Captcha int not null,
-                        CreationDate datetime2 not null,
-                        constraint PK_CaptchaCodes primary key(Id));
-                else
-                    delete from dbo.CaptchaCodes where CreationDate < @date;";
+        long now = Environment.TickCount64;
+        long last = Volatile.Read(ref _lastCleanUpTicks);
+
+        if (now - last < CleanUpInterval.TotalMilliseconds)
+            return;
+
+        if (Interlocked.CompareExchange(ref _lastCleanUpTicks, now, last) == last)
+        {
+            try
+            {
+                CleanUp();
+            }
+            catch
+            {
+                // Suppress exceptions in opportunistic cleanup to avoid breaking captcha generation
+            }
+        }
+    }
+
+    public static int CleanUp(TimeSpan? olderThan = null)
+    {
+        if (string.IsNullOrEmpty(ConnectionString))
+            throw new InvalidOperationException("ConnectionString is not configured.");
+
+        DateTime cutoffDate = DateTime.UtcNow.Subtract(olderThan ?? Expiration);
         using var cnnct = new SqlConnection(ConnectionString);
-        using var cmnd = new SqlCommand(cmdTxt, cnnct);
-        cmnd.Parameters.Add(new SqlParameter("@date", DateTime.Now.AddMinutes(-5)));
+        using var cmnd = new SqlCommand("delete from dbo.CaptchaCodes where CreationDate < @date;", cnnct);
+        cmnd.Parameters.Add(new SqlParameter("@date", SqlDbType.DateTime2) { Value = cutoffDate });
         cnnct.Open();
-        cmnd.ExecuteNonQuery();
+        return cmnd.ExecuteNonQuery();
     }
 }
