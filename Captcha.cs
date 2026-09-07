@@ -102,15 +102,13 @@ public class Captcha
         int.TryParse(userInput, out int input);
 
         using var cnnct = new SqlConnection(ConnectionString);
-        using var cmnd = new SqlCommand($"select 1 from dbo.CaptchaCodes where Id={code} and Captcha={input}", cnnct);
+        using var cmnd = new SqlCommand(
+            "delete from dbo.CaptchaCodes where Id = @id and Captcha = @captcha and CreationDate >= @date", cnnct);
+        cmnd.Parameters.Add(new SqlParameter("@id", code));
+        cmnd.Parameters.Add(new SqlParameter("@captcha", input));
+        cmnd.Parameters.Add(new SqlParameter("@date", DateTime.Now.AddMinutes(-5)));
         cnnct.Open();
-        bool exists = Convert.ToBoolean(cmnd.ExecuteScalar());
-        if (exists)
-        {
-            cmnd.CommandText = $"delete from dbo.CaptchaCodes where Id={code} and Captcha={input}";
-            cmnd.ExecuteNonQuery();
-        }
-        return exists;
+        return cmnd.ExecuteNonQuery() == 1;
     }
 
     private static void CleanUp()
