@@ -1,4 +1,5 @@
-﻿using Microsoft.Data.SqlClient;
+using System.Security.Cryptography;
+using Microsoft.Data.SqlClient;
 using SixLabors.Fonts;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Drawing;
@@ -27,8 +28,7 @@ public class Captcha
     {
         CleanUp();
 
-        var rnd = new Random();
-        int randNumber = rnd.Next((int)Math.Pow(10, Digits));
+        int randNumber = RandomNumberGenerator.GetInt32((int)Math.Pow(10, Digits));
 
         using var img = new Image<Rgba32>(Width, Height);
         var font = new FontCollection()
@@ -42,6 +42,7 @@ public class Captcha
         for (int i = 0; i < charSize.Length; i++)
             charSize[i] = TextMeasurer.MeasureSize(txt.Substring(i, 1), textOptions);
 
+        var rnd = new Random();
         float x = ((float)rnd.NextDouble() + 1f) * Width * 0.1f, y;
         float spaceSum = Width - 2 * x - charSize.Sum(s => s.Width);
         float space;
